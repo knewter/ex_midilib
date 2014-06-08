@@ -20,3 +20,10 @@ This was ported from the BashoBanjo vnode lib.  You can use it like so:
 ```elixir
 ExMidilib.AuGenerator.generate(120, 0.5, 1)
 ```
+
+To hear it play a midifile it's read (by reading the midi data, generating PCM
+files on the fly, and piping those into paplay), run this:
+
+```elixir
+ExMidilib.MidiPlayer.play('midi/mario.mid')
+```
