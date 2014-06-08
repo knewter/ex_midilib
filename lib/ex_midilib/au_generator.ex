@@ -16,7 +16,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-%% Copyright (c) 2007-2010 Basho Technologies, Inc.  All Rights Reserved.
+# Copyright (c) 2007-2010 Basho Technologies, Inc.  All Rights Reserved.
+
 defmodule ExMidilib.AuGenerator do
   @sample_rate 16_000
   @channels 2
