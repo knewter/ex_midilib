@@ -7,18 +7,16 @@ defmodule ExMidilib.Midifile do
   use ExMidilib.Constants
   use Bitwise
 
-  @doc """
-  Returns
-      {:seq, {header...}, conductor_track, list_of_tracks}
-  `header` is `{:header, format, division}`
-  `conductor_track` is the first track of a format 1 MIDI file
-  each track including the conductor track is
-      {:track, list_of_events}
-  each event is
-      {:event_name, delta_time, [values...]}
-  where values after `delta_time` are specific to each event type. If the value
-  is a string, then the string appears instead of [values...].
-  """
+  # Returns
+  # {:seq, {header...}, conductor_track, list_of_tracks}
+  # `header` is `{:header, format, division}`
+  # `conductor_track` is the first track of a format 1 MIDI file
+  # each track including the conductor track is
+  # {:track, list_of_events}
+  # each event is
+  # {:event_name, delta_time, [values...]}
+  # where values after `delta_time` are specific to each event type. If the value
+  # is a string, then the string appears instead of [values...].
   #FIXME: Typespecs for this!
   def read(path) do
     case :file.open(path, [:read, :binary, :raw]) do
@@ -34,9 +32,7 @@ defmodule ExMidilib.Midifile do
     end
   end
 
-  @doc """
-  Look for Cookie in file and return file position after Cookie.
-  """
+  # Look for Cookie in file and return file position after Cookie.
   defp look_for_chunk(_file, file_pos, cookie, {:ok, cookie}) do
     file_pos + size(cookie)
   end
@@ -61,18 +57,18 @@ defmodule ExMidilib.Midifile do
     # TODO: make this distributed. Would need to scan each track to get start
     # position of next track.
     IO.puts("read_tracks, num_tracks = #{num_tracks}, file_pos = #{file_pos}")
-    [track, next_track_file_pos] = read_track(file, file_pos),
+    [track, next_track_file_pos] = read_track(file, file_pos)
     IO.puts("read_tracks, next_track_file_pos = #{next_track_file_pos}")
     read_tracks(file, num_tracks - 1, next_track_file_pos, [track|tracks])
   end
 
   defp read_track(file, file_pos) do
-    track_start = look_for_chunk(file, file_pos, "MTrk", :file.pread(file, filepos, 4))
+    track_start = look_for_chunk(file, file_pos, "MTrk", :file.pread(file, file_pos, 4))
     bytes_to_read = parse_track_header(:file.pread(file, track_start, 4))
     IO.puts "reading track, track_start = #{track_start}, bytes_to_read = #{bytes_to_read}"
     IO.puts "next track pos = #{track_start + 4 + bytes_to_read}"
-    put(:status, 0)
-    put(:chan, -1)
+    Process.put(:status, 0)
+    Process.put(:chan, -1)
     [{:track, event_list(file, track_start + 4, bytes_to_read, [])},
       track_start + 4 + bytes_to_read]
   end
@@ -87,7 +83,7 @@ defmodule ExMidilib.Midifile do
   defp event_list(file, file_pos, bytes_to_read, events) do
     [delta_time, var_len_bytes_used] = read_var_len(:file.pread(file, file_pos, 4))
     {:ok, three_bytes} = :file.pread(file, file_pos + var_len_bytes_used, 3)
-    IO.puts("reading event, file_pos = #{file_pos}, bytes_to_read = #{bytes_to_read}, three_bytes = #{three_bytes}")
+    IO.puts("reading event, file_pos = #{inspect file_pos}, bytes_to_read = #{inspect bytes_to_read}, three_bytes = #{inspect three_bytes}")
     [event, event_bytes_read] = read_event(file, file_pos + var_len_bytes_used, delta_time, three_bytes)
     bytes_read = var_len_bytes_used + event_bytes_read
     event_list(file, file_pos + bytes_read, bytes_to_read - bytes_read, [event|events])
@@ -96,85 +92,85 @@ defmodule ExMidilib.Midifile do
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_off :: size(4), chan :: size(4), note :: size(8), vel :: size(8) >>) do
     IO.puts("off")
-    put(:status, @status_nibble_off)
-    put(:chan, chan)
+    Process.put(:status, @status_nibble_off)
+    Process.put(:chan, chan)
     [{:off, delta_time, [chan, note, vel]}, 3]
   end
   # note on, velocity 0 is a note off
   defp read_event(_file, _file_pos, delta_time,
 	    <<@status_nibble_on :: size(4), chan :: size(4), note :: size(8), 0 :: size(8)>>) do
-    IO.puts "off (using on vel 0)")
-    put(:status, @status_nibble_on)
-    put(:chan, chan),
+    IO.puts "off (using on vel 0)"
+    Process.put(:status, @status_nibble_on)
+    Process.put(:chan, chan)
     [{:off, delta_time, [chan, note, 64]}, 3]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_on :: size(4), chan :: size(4), note :: size(8), vel :: size(8) >>) do
     IO.puts "on"
-    put(:status, @status_nibble_on)
-    put(:chan, chan),
+    Process.put(:status, @status_nibble_on)
+    Process.put(:chan, chan)
     [{:on, delta_time, [chan, note, vel]}, 3]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_poly_press :: size(4), chan :: size(4), note :: size(8), amount :: size(8)>>) do
     IO.puts "poly press"
-    put(:status, @status_nibble_poly_press)
-    put(:chan, chan),
+    Process.put(:status, @status_nibble_poly_press)
+    Process.put(:chan, chan)
     [{:poly_press, delta_time, [chan, note, amount]}, 3]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_controller :: size(4), chan :: size(4), controller :: size(8), value :: size(8)>>) do
-    IO.puts "controller ch #{chan}, ctrl #{controller}, val #{val}"
-    put(:status, @status_nibble_controller)
-    put(:chan, chan)
+    IO.puts "controller ch #{chan}, ctrl #{controller}, val #{value}"
+    Process.put(:status, @status_nibble_controller)
+    Process.put(:chan, chan)
     [{:controller, delta_time, [chan, controller, value]}, 3]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_program_change :: size(4), chan :: size(4), program :: size(8), _ :: size(8)>>) do
     IO.puts "prog change"
-    put(:status, @status_nibble_program_change)
-    put(:chan, chan)
+    Process.put(:status, @status_nibble_program_change)
+    Process.put(:chan, chan)
     [{:program, delta_time, [chan, program]}, 2]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_channel_pressure :: size(4), chan :: size(4), amount :: size(8), _ :: size(8)>>) do
     IO.puts "chan pressure"
-    put(:status, @status_nibble_channel_pressure)
-    put(:chan, chan)
+    Process.put(:status, @status_nibble_channel_pressure)
+    Process.put(:chan, chan)
     [{:chan_press, delta_time, [chan, amount]}, 2]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_pitch_bend :: size(4), chan :: size(4), 0 :: size(1), lsb :: size(7), 0 :: size(1), msb :: size(7)>>) do
     IO.puts "pitch bend"
-    put(:status, @status_nibble_pitch_bend)
-    put(:chan, chan)
-    [{:pitch_bend, delta_time, [chan, <<0 :: size(2), msb :: size(7), lsb :: size(7)]}, 3]
+    Process.put(:status, @status_nibble_pitch_bend)
+    Process.put(:chan, chan)
+    [{:pitch_bend, delta_time, [chan, <<0 :: size(2), msb :: size(7), lsb :: size(7)>>]}, 3]
   end
   defp read_event(_f, _file_pos, delta_time,
       <<@status_meta_event :: size(8), @meta_track_end :: size(8), 0 :: size(8)>>) do
     IO.puts "end of track"
-    put(:status, @status_meta_event)
-    put(:chan, 0)
+    Process.put(:status, @status_meta_event)
+    Process.put(:chan, 0)
     [{:track_end, delta_time, []}, 3]
   end
   defp read_event(file, file_pos, delta_time, <<@status_meta_event :: size(8), type :: size(8), _ :: size(8)>>) do
     IO.puts "meta event"
-    put(:status, @status_meta_event)
-    put(:chan, 0)
+    Process.put(:status, @status_meta_event)
+    Process.put(:chan, 0)
     [length, length_bytes_used] = read_var_len(:file.pread(file, file_pos + 2, 4))
     length_before_data = length_bytes_used + 2
     {:ok, data} = :file.pread(file, file_pos + length_before_data, length)
     total_length = length_before_data + length
-    IO.puts "  type = #{type}, var len = #{length}, len before data = #{length_before_data}, total len = #{total_length},\n  data = #{data}"
+    IO.puts "  type = #{inspect type}, var len = #{inspect length}, len before data = #{inspect length_before_data}, total len = #{inspect total_length},\n  data = #{inspect data}"
     case type do
       @meta_seq_num    -> [{:seq_num, delta_time, [data]}, total_length]
-      @meta_text       -> [{:text, delta_time, binary_to_list(data)}, total_length]
-      @meta_copyright  -> [{:copyright, delta_time, binary_to_list(data)}, total_length]
-      @meta_deq_name   -> [{:seq_name, delta_time, binary_to_list(data)}, total_length]
-      @meta_instrument -> [{:instrument, delta_time, binary_to_list(data)}, total_length]
-      @meta_lyric      -> [{:lyric, delta_time, binary_to_list(data)}, total_length]
-      @meta_marker     -> [{:marker, delta_time, binary_to_list(data)}, total_length]
-      @meta_cue        -> [{:cue, delta_time, binary_to_list(data)}, total_length]
+      @meta_text       -> [{:text, delta_time, String.to_char_list(data)}, total_length]
+      @meta_copyright  -> [{:copyright, delta_time, String.to_char_list(data)}, total_length]
+      @meta_seq_name   -> [{:seq_name, delta_time, String.to_char_list(data)}, total_length]
+      @meta_instrument -> [{:instrument, delta_time, String.to_char_list(data)}, total_length]
+      @meta_lyric      -> [{:lyric, delta_time, String.to_char_list(data)}, total_length]
+      @meta_marker     -> [{:marker, delta_time, String.to_char_list(data)}, total_length]
+      @meta_cue        -> [{:cue, delta_time, String.to_char_list(data)}, total_length]
       @meta_midi_chan_prefix -> [{:midi_chan_prefix, delta_time, [data]}, total_length]
       @meta_set_tempo  ->
         # Data is microseconds per quarter note, in three bytes
@@ -191,29 +187,29 @@ defmodule ExMidilib.Midifile do
   end
   defp read_event(file, file_pos, delta_time, <<@status_sysex :: size(8), _ :: size(16)>>) do
     IO.puts "sysex"
-    put(:status, @status_sysex)
-    put(:chan, 0)
+    Process.put(:status, @status_sysex)
+    Process.put(:chan, 0)
     [length, length_bytes_used] = read_var_len(:file.pread(file, file_pos + 1, 4))
     {:ok, data} = :file.pread(file, file_pos + length_bytes_used, length)
     [{:sysex, delta_time, [data]}, length_bytes_used + length]
   end
   defp read_event(file, file_pos, delta_time, <<b0 :: size(8), b1 :: size(8), _ :: size(8)>>) when b0 < 128 do
     # Handle running status bytes
-    status = get(:status),
-    chan = get(:chan),
+    status = Process.get(:status)
+    chan = Process.get(:chan)
     IO.puts "running status byte, status = #{status}, chan = #{chan}"
     [event, num_bytes] = read_event(file, file_pos, delta_time, <<status :: size(4), chan :: size(4), b0 :: size(8), b1 :: size(8)>>)
     [event, num_bytes - 1]
   end
   defp read_event(_file, _file_pos, delta_time, <<unknown :: size(8), _ :: size(16)>>) do
     IO.puts "unknown byte #{unknown}"
-    put(:status, 0)
-    put(:chan, 0)
+    Process.put(:status, 0)
+    Process.put(:chan, 0)
     #exit("Unknown status byte " ++ Unknown).
     [{:unknown_status, delta_time, [unknown]}, 3]
   end
 
-  defp read_var_len({:ok, <<0 :: size(1), b0 :: size(8), _ :: size(24)>>}) do
+  defp read_var_len({:ok, <<0 :: size(1), b0 :: size(7), _ :: size(24)>>}) do
     [b0, 1]
   end
   defp read_var_len({:ok, <<1 :: size(1), b0 :: size(7), 0 :: size(1), b1 :: size(7), _ :: size(16)>>}) do
@@ -227,7 +223,7 @@ defmodule ExMidilib.Midifile do
   end
   defp read_var_len({:ok, <<1 :: size(1), b0 :: size(7), 1 :: size(1), b1 :: size(7), 1 :: size(1), b2 :: size(7), 1 :: size(1), b3 :: size(7)>>}) do
     IO.puts "Warning: bad var len format; all 4 bytes have high bit set"
-    [(b0 <<< 21) + (b1 <<< 14) + (b2 <<< 7) + b3, 4].
+    [(b0 <<< 21) + (b1 <<< 14) + (b2 <<< 7) + b3, 4]
   end
 
   def write({:seq, header, conductor_track, tracks}, path) do
@@ -237,22 +233,22 @@ defmodule ExMidilib.Midifile do
   end
 
   defp header_io_list(header, num_tracks) do
-    {:header, _, division} = header,
-      ["MThd",
-       0, 0, 0, 6,                  # header chunk size
-       0, 1,                        # format,
-       (num_tracks >>> 8) &&& 255,  # num tracks
-        num_tracks        &&& 255,
-       (division >>> 8) &&& 255,   # division
-        division        &&& 255]
+    {:header, _, division} = header
+    ["MThd",
+     0, 0, 0, 6,                  # header chunk size
+     0, 1,                        # format,
+     (num_tracks >>> 8) &&& 255,  # num tracks
+      num_tracks        &&& 255,
+     (division >>> 8) &&& 255,   # division
+      division        &&& 255]
   end
 
   defp track_io_list(track) do
     {:track, events} = track
-    put(:status, 0),
-    put(:chan, 0),
+    Process.put(:status, 0)
+    Process.put(:chan, 0)
     event_list = :lists.map(fn(e) -> event_io_list(e) end, events)
-    chunk_size = chunk_size(event_list),
+    chunk_size = chunk_size(event_list)
     ["MTrk",
      (chunk_size >>> 24) &&& 255,
      (chunk_size >>> 16) &&& 255,
@@ -261,29 +257,27 @@ defmodule ExMidilib.Midifile do
      event_list]
   end
 
-  @doc """
-  Return byte size of L, which is an IO list that contains lists, bytes, and
-  binaries.
-  """
+  # Return byte size of L, which is an IO list that contains lists, bytes, and
+  # binaries.
   defp chunk_size(l) do
-    :lists.foldl(fn(e, acc) -> acc + io_list_element_size(e) end, 0 :lists.flatten(l))
+    :lists.foldl(fn(e, acc) -> acc + io_list_element_size(e) end, 0, :lists.flatten(l))
   end
   defp io_list_element_size(e) when is_binary(e), do: size(e)
   defp io_list_element_size(_), do: 1
 
   defp event_io_list({:off, delta_time, [chan, note, vel]}) do
-    running_status = get(:status)
-    running_chan = get(:chan)
-    if running_chan == chan,
-	     (running_status == @status_nibble_off orelse
-	     (running_status == @status_nibble_on andalso vel == 64)) do
+    running_status = Process.get(:status)
+    running_chan = Process.get(:chan)
+    if running_chan == chan &&
+	     (running_status == @status_nibble_off ||
+	     (running_status == @status_nibble_on && vel == 64)) do
 	    status = []
 	    out_vel = 0
     else
 	    status = (@status_nibble_off <<< 4) + chan
 	    out_vel = vel
-	    put(:status, @status_nibble_off)
-	    put(:chan, chan)
+	    Process.put(:status, @status_nibble_off)
+	    Process.put(:chan, chan)
     end
     [var_len(delta_time), status, note, out_vel];
   end
@@ -308,7 +302,7 @@ defmodule ExMidilib.Midifile do
   end
   defp event_io_list({:track_end, delta_time}) do
     IO.puts("track_end")
-    put(:status, @status_meta_event)
+    Process.put(:status, @status_meta_event)
     [var_len(delta_time), @status_meta_event, @meta_track_end, 0]
   end
   defp event_io_list({:seq_num, delta_time, [data]}) do
@@ -321,7 +315,7 @@ defmodule ExMidilib.Midifile do
     meta_io_list(delta_time, @meta_copyright, data)
   end
   defp event_io_list({:seq_name, delta_time, data}) do
-    put(:status, @status_meta_event)
+    Process.put(:status, @status_meta_event)
     meta_io_list(delta_time, @meta_track_end, data)
   end
   defp event_io_list({:instrument, delta_time, data}) do
@@ -333,7 +327,7 @@ defmodule ExMidilib.Midifile do
   defp event_io_list({:marker, delta_time, data}) do
     meta_io_list(delta_time, @meta_marker, data)
   end
-  dep event_io_list({:cue, delta_time, data}) do
+  defp event_io_list({:cue, delta_time, data}) do
     meta_io_list(delta_time, @meta_cue, data)
   end
   defp event_io_list({:midi_chan_prefix, delta_time, [data]}) do
@@ -341,8 +335,8 @@ defmodule ExMidilib.Midifile do
   end
   defp event_io_list({:tempo, delta_time, [data]}) do
     IO.puts "tempo, data = #{data}"
-    put(:status, @status_meta_event)
-    [var_len_delta_time, @status_meta_event, @meta_set_tempo, var_len(3),
+    Process.put(:status, @status_meta_event)
+    [var_len(delta_time), @status_meta_event, @meta_set_tempo, var_len(3),
       (data >>> 16) &&& 255,
       (data >>>  8) &&& 255,
        data         &&& 255]
@@ -365,24 +359,24 @@ defmodule ExMidilib.Midifile do
 
   defp meta_io_list(delta_time, type, data) when is_binary(data) do
     IO.puts "meta_io_list (bin) type = #{type}, data = #{data}"
-    put(:status, @status_meta_event)
+    Process.put(:status, @status_meta_event)
     [var_len(delta_time), @status_meta_event, type, var_len(size(data)), data]
   end
   defp meta_io_list(delta_time, type, data) do
     IO.puts "meta_io_list type = #{type}, data = #{data}"
-    put(:status, @status_meta_event)
+    Process.put(:status, @status_meta_event)
     [var_len(delta_time), @status_meta_event, type, var_len(length(data)), data]
   end
 
   defp running_status(high_nibble, chan) do
-    running_status = get(:status)
-    running_chan = get(:chan)
-    if running_status == high_nibble, running_chan == chan do
+    running_status = Process.get(:status)
+    running_chan = Process.get(:chan)
+    if running_status == high_nibble && running_chan == chan do
       IO.puts "running status: status = #{running_status}, chan = #{running_chan}"
       []
     else
-      put(:status, high_nibble)
-      put(:chan, chan)
+      Process.put(:status, high_nibble)
+      Process.put(:chan, chan)
       (high_nibble <<< 4) + chan
     end
   end
@@ -399,7 +393,7 @@ defmodule ExMidilib.Midifile do
   defp var_len(i) when i < (1 <<< 28) do
     <<1 :: size(1), (i >>> 21) :: size(7), 1 :: size(1), (i >>> 14) :: size(7), 1 :: size(1), (i >>> 7) :: size(7), 0 :: size(1), i :: size(7)>>
   end
-  def var_len(i) do
+  defp var_len(i) do
     exit("value #{i} is too big for a variable length number")
   end
 end
