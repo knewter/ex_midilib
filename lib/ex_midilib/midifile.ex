@@ -1,5 +1,15 @@
 # Ported from https://github.com/rustyio/BashoBanjo/blob/master/apps/midilib/src/midifile.erl
 defmodule ExMidilib.Midifile do
+  @debug false
+
+  if @debug do
+    def dprint(message) do
+      IO.puts message
+    end
+  else
+    def dprint(_), do: :ok
+  end
+
   @moduledoc """
   This module reads and writes MIDI files
   """
@@ -56,17 +66,17 @@ defmodule ExMidilib.Midifile do
   defp read_tracks(file, num_tracks, file_pos, tracks) do
     # TODO: make this distributed. Would need to scan each track to get start
     # position of next track.
-    IO.puts("read_tracks, num_tracks = #{num_tracks}, file_pos = #{file_pos}")
+    dprint("read_tracks, num_tracks = #{num_tracks}, file_pos = #{file_pos}")
     [track, next_track_file_pos] = read_track(file, file_pos)
-    IO.puts("read_tracks, next_track_file_pos = #{next_track_file_pos}")
+    dprint("read_tracks, next_track_file_pos = #{next_track_file_pos}")
     read_tracks(file, num_tracks - 1, next_track_file_pos, [track|tracks])
   end
 
   defp read_track(file, file_pos) do
     track_start = look_for_chunk(file, file_pos, "MTrk", :file.pread(file, file_pos, 4))
     bytes_to_read = parse_track_header(:file.pread(file, track_start, 4))
-    IO.puts "reading track, track_start = #{track_start}, bytes_to_read = #{bytes_to_read}"
-    IO.puts "next track pos = #{track_start + 4 + bytes_to_read}"
+    dprint "reading track, track_start = #{track_start}, bytes_to_read = #{bytes_to_read}"
+    dprint "next track pos = #{track_start + 4 + bytes_to_read}"
     Process.put(:status, 0)
     Process.put(:chan, -1)
     [{:track, event_list(file, track_start + 4, bytes_to_read, [])},
@@ -83,7 +93,7 @@ defmodule ExMidilib.Midifile do
   defp event_list(file, file_pos, bytes_to_read, events) do
     [delta_time, var_len_bytes_used] = read_var_len(:file.pread(file, file_pos, 4))
     {:ok, three_bytes} = :file.pread(file, file_pos + var_len_bytes_used, 3)
-    IO.puts("reading event, file_pos = #{inspect file_pos}, bytes_to_read = #{inspect bytes_to_read}, three_bytes = #{inspect three_bytes}")
+    dprint("reading event, file_pos = #{inspect file_pos}, bytes_to_read = #{inspect bytes_to_read}, three_bytes = #{inspect three_bytes}")
     [event, event_bytes_read] = read_event(file, file_pos + var_len_bytes_used, delta_time, three_bytes)
     bytes_read = var_len_bytes_used + event_bytes_read
     event_list(file, file_pos + bytes_read, bytes_to_read - bytes_read, [event|events])
@@ -91,7 +101,7 @@ defmodule ExMidilib.Midifile do
 
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_off :: size(4), chan :: size(4), note :: size(8), vel :: size(8) >>) do
-    IO.puts("off")
+    dprint("off")
     Process.put(:status, @status_nibble_off)
     Process.put(:chan, chan)
     [{:off, delta_time, [chan, note, vel]}, 3]
@@ -99,69 +109,69 @@ defmodule ExMidilib.Midifile do
   # note on, velocity 0 is a note off
   defp read_event(_file, _file_pos, delta_time,
 	    <<@status_nibble_on :: size(4), chan :: size(4), note :: size(8), 0 :: size(8)>>) do
-    IO.puts "off (using on vel 0)"
+    dprint "off (using on vel 0)"
     Process.put(:status, @status_nibble_on)
     Process.put(:chan, chan)
     [{:off, delta_time, [chan, note, 64]}, 3]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_on :: size(4), chan :: size(4), note :: size(8), vel :: size(8) >>) do
-    IO.puts "on"
+    dprint "on"
     Process.put(:status, @status_nibble_on)
     Process.put(:chan, chan)
     [{:on, delta_time, [chan, note, vel]}, 3]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_poly_press :: size(4), chan :: size(4), note :: size(8), amount :: size(8)>>) do
-    IO.puts "poly press"
+    dprint "poly press"
     Process.put(:status, @status_nibble_poly_press)
     Process.put(:chan, chan)
     [{:poly_press, delta_time, [chan, note, amount]}, 3]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_controller :: size(4), chan :: size(4), controller :: size(8), value :: size(8)>>) do
-    IO.puts "controller ch #{chan}, ctrl #{controller}, val #{value}"
+    dprint "controller ch #{chan}, ctrl #{controller}, val #{value}"
     Process.put(:status, @status_nibble_controller)
     Process.put(:chan, chan)
     [{:controller, delta_time, [chan, controller, value]}, 3]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_program_change :: size(4), chan :: size(4), program :: size(8), _ :: size(8)>>) do
-    IO.puts "prog change"
+    dprint "prog change"
     Process.put(:status, @status_nibble_program_change)
     Process.put(:chan, chan)
     [{:program, delta_time, [chan, program]}, 2]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_channel_pressure :: size(4), chan :: size(4), amount :: size(8), _ :: size(8)>>) do
-    IO.puts "chan pressure"
+    dprint "chan pressure"
     Process.put(:status, @status_nibble_channel_pressure)
     Process.put(:chan, chan)
     [{:chan_press, delta_time, [chan, amount]}, 2]
   end
   defp read_event(_file, _file_pos, delta_time,
       <<@status_nibble_pitch_bend :: size(4), chan :: size(4), 0 :: size(1), lsb :: size(7), 0 :: size(1), msb :: size(7)>>) do
-    IO.puts "pitch bend"
+    dprint "pitch bend"
     Process.put(:status, @status_nibble_pitch_bend)
     Process.put(:chan, chan)
     [{:pitch_bend, delta_time, [chan, <<0 :: size(2), msb :: size(7), lsb :: size(7)>>]}, 3]
   end
   defp read_event(_f, _file_pos, delta_time,
       <<@status_meta_event :: size(8), @meta_track_end :: size(8), 0 :: size(8)>>) do
-    IO.puts "end of track"
+    dprint "end of track"
     Process.put(:status, @status_meta_event)
     Process.put(:chan, 0)
     [{:track_end, delta_time, []}, 3]
   end
   defp read_event(file, file_pos, delta_time, <<@status_meta_event :: size(8), type :: size(8), _ :: size(8)>>) do
-    IO.puts "meta event"
+    dprint "meta event"
     Process.put(:status, @status_meta_event)
     Process.put(:chan, 0)
     [length, length_bytes_used] = read_var_len(:file.pread(file, file_pos + 2, 4))
     length_before_data = length_bytes_used + 2
     {:ok, data} = :file.pread(file, file_pos + length_before_data, length)
     total_length = length_before_data + length
-    IO.puts "  type = #{inspect type}, var len = #{inspect length}, len before data = #{inspect length_before_data}, total len = #{inspect total_length},\n  data = #{inspect data}"
+    dprint "  type = #{inspect type}, var len = #{inspect length}, len before data = #{inspect length_before_data}, total len = #{inspect total_length},\n  data = #{inspect data}"
     case type do
       @meta_seq_num    -> [{:seq_num, delta_time, [data]}, total_length]
       @meta_text       -> [{:text, delta_time, String.to_char_list(data)}, total_length]
@@ -181,12 +191,12 @@ defmodule ExMidilib.Midifile do
       @meta_key_sig    -> [{:key_signature, delta_time, [data]}, total_length]
       @meta_sequencer_specific -> [{:seq_name, delta_time, [data]}, total_length]
       _ ->
-        IO.puts "  unknown meta type #{type}"
+        dprint "  unknown meta type #{type}"
         [{:unknown_meta, delta_time, [type, data]}, total_length]
     end
   end
   defp read_event(file, file_pos, delta_time, <<@status_sysex :: size(8), _ :: size(16)>>) do
-    IO.puts "sysex"
+    dprint "sysex"
     Process.put(:status, @status_sysex)
     Process.put(:chan, 0)
     [length, length_bytes_used] = read_var_len(:file.pread(file, file_pos + 1, 4))
@@ -197,12 +207,12 @@ defmodule ExMidilib.Midifile do
     # Handle running status bytes
     status = Process.get(:status)
     chan = Process.get(:chan)
-    IO.puts "running status byte, status = #{status}, chan = #{chan}"
+    dprint "running status byte, status = #{status}, chan = #{chan}"
     [event, num_bytes] = read_event(file, file_pos, delta_time, <<status :: size(4), chan :: size(4), b0 :: size(8), b1 :: size(8)>>)
     [event, num_bytes - 1]
   end
   defp read_event(_file, _file_pos, delta_time, <<unknown :: size(8), _ :: size(16)>>) do
-    IO.puts "unknown byte #{unknown}"
+    dprint "unknown byte #{unknown}"
     Process.put(:status, 0)
     Process.put(:chan, 0)
     #exit("Unknown status byte " ++ Unknown).
@@ -222,7 +232,7 @@ defmodule ExMidilib.Midifile do
     [(b0 <<< 21) + (b1 <<< 14) + (b2 <<< 7) + b3, 4]
   end
   defp read_var_len({:ok, <<1 :: size(1), b0 :: size(7), 1 :: size(1), b1 :: size(7), 1 :: size(1), b2 :: size(7), 1 :: size(1), b3 :: size(7)>>}) do
-    IO.puts "Warning: bad var len format; all 4 bytes have high bit set"
+    dprint "Warning: bad var len format; all 4 bytes have high bit set"
     [(b0 <<< 21) + (b1 <<< 14) + (b2 <<< 7) + b3, 4]
   end
 
@@ -301,7 +311,7 @@ defmodule ExMidilib.Midifile do
      <<0 :: size(1), lsb :: size(7), 0 :: size(1), msb :: size(7)>>]
   end
   defp event_io_list({:track_end, delta_time}) do
-    IO.puts("track_end")
+    dprint("track_end")
     Process.put(:status, @status_meta_event)
     [var_len(delta_time), @status_meta_event, @meta_track_end, 0]
   end
@@ -334,7 +344,7 @@ defmodule ExMidilib.Midifile do
     meta_io_list(delta_time, @meta_midi_chan_prefix, data)
   end
   defp event_io_list({:tempo, delta_time, [data]}) do
-    IO.puts "tempo, data = #{data}"
+    dprint "tempo, data = #{data}"
     Process.put(:status, @status_meta_event)
     [var_len(delta_time), @status_meta_event, @meta_set_tempo, var_len(3),
       (data >>> 16) &&& 255,
@@ -358,12 +368,12 @@ defmodule ExMidilib.Midifile do
   end
 
   defp meta_io_list(delta_time, type, data) when is_binary(data) do
-    IO.puts "meta_io_list (bin) type = #{type}, data = #{data}"
+    dprint "meta_io_list (bin) type = #{type}, data = #{data}"
     Process.put(:status, @status_meta_event)
     [var_len(delta_time), @status_meta_event, type, var_len(size(data)), data]
   end
   defp meta_io_list(delta_time, type, data) do
-    IO.puts "meta_io_list type = #{type}, data = #{data}"
+    dprint "meta_io_list type = #{type}, data = #{data}"
     Process.put(:status, @status_meta_event)
     [var_len(delta_time), @status_meta_event, type, var_len(length(data)), data]
   end
@@ -372,7 +382,7 @@ defmodule ExMidilib.Midifile do
     running_status = Process.get(:status)
     running_chan = Process.get(:chan)
     if running_status == high_nibble && running_chan == chan do
-      IO.puts "running status: status = #{running_status}, chan = #{running_chan}"
+      dprint "running status: status = #{running_status}, chan = #{running_chan}"
       []
     else
       Process.put(:status, high_nibble)
