@@ -44,19 +44,19 @@ defmodule ExMidilib.Midifile do
 
   # Look for Cookie in file and return file position after Cookie.
   defp look_for_chunk(_file, file_pos, cookie, {:ok, cookie}) do
-    file_pos + size(cookie)
+    file_pos + :erlang.size(cookie)
   end
   defp look_for_chunk(file, file_pos, cookie, {:ok, _}) do
     # This isn't efficient, because we only advance one character at a time.
     # We should really look for the first char in Cookie and, if found,
     # advance that far.
     look_for_chunk(file, file_pos + 1, cookie, :file.pread(file, file_pos + 1,
-                  size(cookie)))
+                  :erlang.size(cookie)))
 
   end
 
-  defp parse_header({:ok, <<_bytes_to_read :: [integer, size(32)], format :: [integer, size(16)],
-                     num_tracks :: [integer, size(16)], division :: [integer, size(16)] >>}) do
+  defp parse_header({:ok, <<_bytes_to_read :: integer-size(32), format :: integer-size(16),
+                     num_tracks :: integer-size(16), division :: integer-size(16) >>}) do
      [{:header, format, division}, num_tracks]
   end
 
@@ -83,7 +83,7 @@ defmodule ExMidilib.Midifile do
       track_start + 4 + bytes_to_read]
   end
 
-  defp parse_track_header({:ok, <<bytes_to_read :: [integer, size(32)]>>}) do
+  defp parse_track_header({:ok, <<bytes_to_read :: integer-size(32)>>}) do
     bytes_to_read
   end
 
@@ -272,7 +272,7 @@ defmodule ExMidilib.Midifile do
   defp chunk_size(l) do
     :lists.foldl(fn(e, acc) -> acc + io_list_element_size(e) end, 0, :lists.flatten(l))
   end
-  defp io_list_element_size(e) when is_binary(e), do: size(e)
+  defp io_list_element_size(e) when is_binary(e), do: :erlang.size(e)
   defp io_list_element_size(_), do: 1
 
   defp event_io_list({:off, delta_time, [chan, note, vel]}) do
@@ -370,12 +370,12 @@ defmodule ExMidilib.Midifile do
   defp meta_io_list(delta_time, type, data) when is_binary(data) do
     dprint "meta_io_list (bin) type = #{type}, data = #{data}"
     Process.put(:status, @status_meta_event)
-    [var_len(delta_time), @status_meta_event, type, var_len(size(data)), data]
+    [var_len(delta_time), @status_meta_event, type, var_len(:erlang.size(data)), data]
   end
   defp meta_io_list(delta_time, type, data) do
     dprint "meta_io_list type = #{type}, data = #{data}"
     Process.put(:status, @status_meta_event)
-    [var_len(delta_time), @status_meta_event, type, var_len(length(data)), data]
+    [var_len(delta_time), @status_meta_event, type, var_len(:erlang.length(data)), data]
   end
 
   defp running_status(high_nibble, chan) do

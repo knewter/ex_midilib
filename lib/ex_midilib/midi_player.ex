@@ -17,7 +17,7 @@ defmodule ExMidilib.MidiPlayer do
 
   def read_midi(filename) do
     {:seq, {:header, _, time}, global_track, tracks} = Midifile.read(filename)
-    <<mode :: [integer, size(1)], ticks_per_beat :: [integer, size(15)]>> = <<time :: [integer, size(16)]>>
+    <<mode :: integer-size(1), ticks_per_beat :: integer-size(15)>> = <<time :: integer-size(16)>>
     if mode == 1, do: ticks_per_beat = 0
     ms_per_tick = calculate_ms_per_tick(ticks_per_beat, global_track)
     notes = transform_tracks([global_track|tracks])
@@ -63,8 +63,8 @@ defmodule ExMidilib.MidiPlayer do
     :lists.sort(sort_fun, events)
   end
 
-  def transform_events3([on,off|rest]) when Record.record?(on, :on) and
-                                            Record.record?(off, :off) and
+  def transform_events3([on,off|rest]) when Record.is_record(on, :on) and
+                                            Record.is_record(off, :off) and
                                             on(on, :note) == off(off, :note) and
                                             on(on, :controller) == off(off, :controller) do
     note = note(

@@ -40,20 +40,20 @@ defmodule ExMidilib.AuGenerator do
           scale = 1
       end
       value = :erlang.trunc(32767 * amplitude * scale * :math.sin(t * x))
-      for _ <- :lists.seq(1, @channels), do: <<value :: [big, signed, integer, size(16)]>>
+      for _ <- :lists.seq(1, @channels), do: <<value :: big-signed-integer-size(16)>>
     end
     pre_data = for x <- :lists.seq(1, num_samples), do: f.(x)
-    data = iodata_to_binary(pre_data)
-    size = size(data)
+    data = IO.iodata_to_binary(pre_data)
+    size = :erlang.size(data)
 
     # From
     <<
-      ".snd",                                        # Magic number
-      0024 :: [unsigned, integer, size(32)],         # Data offset
-      size :: [unsigned, integer, size(32)],         # Data size
-      0003 :: [unsigned, integer, size(32)],         # 16-bit linear PCM
-      @sample_rate :: [unsigned, integer, size(32)], # 8000 sample rate
-      @channels :: [unsigned, integer, size(32)],    # two channels
+      ".snd",                                    # Magic number
+      0024 :: unsigned-integer-size(32),         # Data offset
+      size :: unsigned-integer-size(32),         # Data size
+      0003 :: unsigned-integer-size(32),         # 16-bit linear PCM
+      @sample_rate :: unsigned-integer-size(32), # 8000 sample rate
+      @channels :: unsigned-integer-size(32),    # two channels
       data :: binary
     >>
   end
